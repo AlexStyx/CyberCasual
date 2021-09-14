@@ -6,14 +6,33 @@
 //
 
 import SpriteKit
+import GameplayKit
 
 class GameScene: SKScene {
     
+    fileprivate var player: SKSpriteNode!
+    fileprivate var upperBound: SKSpriteNode!
+    fileprivate var bottomBound: SKSpriteNode!
+    fileprivate var upperPoint: SKSpriteNode!
+    fileprivate var bottomPoint: SKSpriteNode!
+    fileprivate var targetPosition: CGPoint!
+    fileprivate var countLabel: SKLabelNode!
+    fileprivate var tapToStartLabel: SKLabelNode!
+    fileprivate var gameOverLabel: SKLabelNode!
+    fileprivate var bestScoreLabel: SKLabelNode!
+    fileprivate let leftBound: CGFloat = -100
+    fileprivate let rightBound:CGFloat = 100
+    fileprivate var enemies: [Enemy] = []
+    fileprivate var hasFinished = false
     
-    fileprivate var label : SKLabelNode?
-    fileprivate var spinnyNode : SKShapeNode?
+    fileprivate var count = 0 {
+        didSet {
+            countLabel.alpha = 0
+            countLabel.text = "Score: \(count)"
+            countLabel.alpha = 1
+        }
+    }
 
-    
     class func newGameScene() -> GameScene {
         // Load 'GameScene.sks' as an SKScene.
         guard let scene = SKScene(fileNamed: "GameScene") as? GameScene else {
@@ -23,121 +42,159 @@ class GameScene: SKScene {
         
         // Set the scale mode to scale to fit the window
         scene.scaleMode = .aspectFill
-        
         return scene
     }
     
-    func setUpScene() {
-        // Get label node from scene and store it for use later
-        self.label = self.childNode(withName: "//helloLabel") as? SKLabelNode
-        if let label = self.label {
-            label.alpha = 0.0
-            label.run(SKAction.fadeIn(withDuration: 2.0))
+    override func didMove(to view: SKView) {
+        self.physicsWorld.contactDelegate = self
+        player = (self.childNode(withName: "Player") as! SKSpriteNode)
+        upperBound = (self.childNode(withName: "upperBound") as! SKSpriteNode)
+        bottomBound = (self.childNode(withName: "bottomBound") as! SKSpriteNode)
+        upperPoint = (self.childNode(withName: "upperPoint") as! SKSpriteNode)
+        bottomPoint = (self.childNode(withName: "bottomPoint") as! SKSpriteNode)
+        countLabel = (self.childNode(withName: "countLabel") as! SKLabelNode)
+        tapToStartLabel = (self.childNode(withName: "tapToStartLabel") as! SKLabelNode)
+        gameOverLabel = (self.childNode(withName: "gameOverLabel") as! SKLabelNode)
+        bestScoreLabel = (self.childNode(withName: "bestScoreLabel") as! SKLabelNode)
+        let bestScore = getBestScore()
+        bestScoreLabel.text = "Best score: \(bestScore)"
+        gameOverLabel.alpha = 0
+        bottomPoint.alpha = 0
+    }
+}
+
+extension GameScene {
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if !hasFinished {
+            tapToStartLabel.alpha = 0
+            movePlayer()
+            if enemies.isEmpty {
+                spawnEnemies()
+            }
+        } else {
+            let bestScore = getBestScore()
+            bestScoreLabel.text = "Best score: \(bestScore)"
+            tapToStartLabel.alpha = 0
+            gameOverLabel.alpha = 0
+            for enemy in enemies {
+                enemy.removeFromParent()
+                guard let index = enemies.firstIndex(of: enemy) else { abort() }
+                enemies.remove(at: index)
+            }
+            let playerStartPosition = CGPoint(x: 21.335, y: -13.652)
+            player.position = playerStartPosition
+            count = 0
+            hasFinished = false
+            movePlayer()
+            if enemies.isEmpty {
+                spawnEnemies()
+            }
         }
-        
-        // Create shape node to use during mouse interaction
-        let w = (self.size.width + self.size.height) * 0.05
-        self.spinnyNode = SKShapeNode.init(rectOf: CGSize.init(width: w, height: w), cornerRadius: w * 0.3)
-        
-        if let spinnyNode = self.spinnyNode {
-            spinnyNode.lineWidth = 4.0
-            spinnyNode.run(SKAction.repeatForever(SKAction.rotate(byAngle: CGFloat(Double.pi), duration: 1)))
-            spinnyNode.run(SKAction.sequence([SKAction.wait(forDuration: 0.5),
-                                              SKAction.fadeOut(withDuration: 0.5),
-                                              SKAction.removeFromParent()]))
-            
-            #if os(watchOS)
-                // For watch we just periodically create one of these and let it spin
-                // For other platforms we let user touch/mouse events create these
-                spinnyNode.position = CGPoint(x: 0.0, y: 0.0)
-                spinnyNode.strokeColor = SKColor.red
-                self.run(SKAction.repeatForever(SKAction.sequence([SKAction.wait(forDuration: 2.0),
-                                                                   SKAction.run({
-                                                                       let n = spinnyNode.copy() as! SKShapeNode
-                                                                       self.addChild(n)
-                                                                   })])))
-            #endif
+    }
+}
+
+extension GameScene: SKPhysicsContactDelegate {
+    func didBegin(_ contact: SKPhysicsContact) {
+        if contact.bodyA.categoryBitMask == contact.bodyB.categoryBitMask {
+            if contact.bodyA.collisionBitMask == 1 {
+                if upperPoint.alpha == 1 {
+                    count += 1
+                    upperPoint.alpha = 0
+                    let randomX = CGFloat.random(in: leftBound...rightBound)
+                    let oldY = bottomPoint.position.y
+                    let newPosition = CGPoint(x: randomX, y: oldY)
+                    bottomPoint.position = newPosition
+                    bottomPoint.alpha = 1
+                }
+            } else {
+                if bottomPoint.alpha == 1 {
+                    count += 1
+                    bottomPoint.alpha = 0
+                    let randomX = CGFloat.random(in: leftBound...rightBound)
+                    let oldY = upperPoint.position.y
+                    let newPosition = CGPoint(x: randomX, y: oldY)
+                    upperPoint.position = newPosition
+                    upperPoint.alpha = 1
+                }
+            }
+            movePlayer()
+        } else {
+            stopGame()
         }
     }
     
-    #if os(watchOS)
-    override func sceneDidLoad() {
-        self.setUpScene()
-    }
-    #else
-    override func didMove(to view: SKView) {
-        self.setUpScene()
-    }
-    #endif
-
-    func makeSpinny(at pos: CGPoint, color: SKColor) {
-        if let spinny = self.spinnyNode?.copy() as! SKShapeNode? {
-            spinny.position = pos
-            spinny.strokeColor = color
-            self.addChild(spinny)
+    fileprivate func stopGame() {
+        let previousBestScore = getBestScore()
+        if previousBestScore < count || previousBestScore == nil {
+            setNewBestScore(score: count)
         }
+        hasFinished = true
+        player.removeAllActions()
+        for enemy in enemies {
+            enemy.removeAllActions()
+        }
+        tapToStartLabel.text =  "Tap to restart"
+        tapToStartLabel.alpha = 1
+        gameOverLabel.alpha = 1
+    }
+}
+
+extension GameScene {
+    fileprivate func calculateDuration(withSpeed speed: CGFloat) -> TimeInterval {
+        let curerntPosition = player.position
+        let vectorX = targetPosition.x - curerntPosition.x
+        let vectorY = targetPosition.y - curerntPosition.y
+        let vectorPosition = CGPoint(x: vectorX, y: vectorY)
+        let vectorLength = sqrt((vectorPosition.x * vectorPosition.x) + (vectorPosition.y * vectorPosition.y))
+        let timeInterval = vectorLength / speed
+        return TimeInterval(timeInterval)
+    }
+    
+    fileprivate func movePlayer() {
+        targetPosition = targetPosition == upperPoint.position ? bottomPoint.position : upperPoint.position
+        let duration = calculateDuration(withSpeed: 250)
+        let movePlayerAction = SKAction.move(to: targetPosition, duration: duration)
+        player.run(movePlayerAction)
     }
     
     override func update(_ currentTime: TimeInterval) {
-        // Called before each frame is rendered
+        for enemy in enemies {
+            if enemy.position.x == 230 {
+                enemies.removeFirst()
+                enemy.removeFromParent()
+            }
+        }
+        if let lastEnemy = enemies.last {
+            if lastEnemy.position.x > 0 {
+                spawnEnemies()
+            }
+        }
+    }
+    
+    fileprivate func spawnEnemies() {
+        let upperBoundY = upperBound.position.y - 50
+        let bottomBoundY = bottomBound.position.y + 50
+        let randomY = CGFloat.random(in: bottomBoundY...upperBoundY)
+        let randomPosition = CGPoint(x: -230, y: randomY)
+        let enemy = Enemy.populateEnemy(at: randomPosition)
+        self.addChild(enemy)
+        enemies.append(enemy)
+        let moveEnemyAction = SKAction.move(to: CGPoint(x: 230, y: randomY), duration: 5)
+        enemy.run(moveEnemyAction)
     }
 }
 
-#if os(iOS) || os(tvOS)
-// Touch-based event handling
+// MARK: - UserDefaults
 extension GameScene {
-
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if let label = self.label {
-            label.run(SKAction.init(named: "Pulse")!, withKey: "fadeInOut")
-        }
-        
-        for t in touches {
-            self.makeSpinny(at: t.location(in: self), color: SKColor.green)
-        }
+    private func setNewBestScore(score: Int) {
+        let saveData = UserDefaults.standard
+        saveData.setValue(score, forKey: "bestScore")
     }
     
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for t in touches {
-            self.makeSpinny(at: t.location(in: self), color: SKColor.blue)
-        }
+    private func getBestScore() -> Int {
+        let getData = UserDefaults.standard
+        let bestScore = getData.integer(forKey: "bestScore")
+        return bestScore
     }
-    
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for t in touches {
-            self.makeSpinny(at: t.location(in: self), color: SKColor.red)
-        }
-    }
-    
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        for t in touches {
-            self.makeSpinny(at: t.location(in: self), color: SKColor.red)
-        }
-    }
-    
-   
 }
-#endif
-
-#if os(OSX)
-// Mouse-based event handling
-extension GameScene {
-
-    override func mouseDown(with event: NSEvent) {
-        if let label = self.label {
-            label.run(SKAction.init(named: "Pulse")!, withKey: "fadeInOut")
-        }
-        self.makeSpinny(at: event.location(in: self), color: SKColor.green)
-    }
-    
-    override func mouseDragged(with event: NSEvent) {
-        self.makeSpinny(at: event.location(in: self), color: SKColor.blue)
-    }
-    
-    override func mouseUp(with event: NSEvent) {
-        self.makeSpinny(at: event.location(in: self), color: SKColor.red)
-    }
-
-}
-#endif
 
