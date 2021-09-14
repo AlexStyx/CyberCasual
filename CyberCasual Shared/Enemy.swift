@@ -6,7 +6,6 @@
 //
 
 import SpriteKit
-import Foundation
 
 final class Enemy: SKSpriteNode {
     static func populateEnemy(at point: CGPoint) -> Enemy {
@@ -31,4 +30,5 @@ final class Enemy: SKSpriteNode {
         let radian = distribution * CGFloat.pi / 180
         return SKAction.rotate(toAngle: radian, duration: 0)
     }
+    
 }

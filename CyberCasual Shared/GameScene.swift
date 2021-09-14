@@ -35,13 +35,14 @@ class GameScene: SKScene {
 
     class func newGameScene() -> GameScene {
         // Load 'GameScene.sks' as an SKScene.
-        guard let scene = SKScene(fileNamed: "GameScene") as? GameScene else {
+        guard let scene = SKScene(fileNamed: "GameScene") as? GameScene
+            else {
             print("Failed to load GameScene.sks")
             abort()
         }
         
         // Set the scale mode to scale to fit the window
-        scene.scaleMode = .aspectFill
+        scene.scaleMode = .aspectFit
         return scene
     }
     
@@ -159,7 +160,7 @@ extension GameScene {
     
     override func update(_ currentTime: TimeInterval) {
         for enemy in enemies {
-            if enemy.position.x == 230 {
+            if enemy.position.x == UIScreen.main.bounds.size.width + 40{
                 enemies.removeFirst()
                 enemy.removeFromParent()
             }
@@ -187,13 +188,13 @@ extension GameScene {
 // MARK: - UserDefaults
 extension GameScene {
     private func setNewBestScore(score: Int) {
-        let saveData = UserDefaults.standard
-        saveData.setValue(score, forKey: "bestScore")
+        let userDefaults = UserDefaults.standard
+        userDefaults.setValue(score, forKey: "bestScore")
     }
     
     private func getBestScore() -> Int {
-        let getData = UserDefaults.standard
-        let bestScore = getData.integer(forKey: "bestScore")
+        let userDefaults = UserDefaults.standard
+        let bestScore = userDefaults.integer(forKey: "bestScore")
         return bestScore
     }
 }
